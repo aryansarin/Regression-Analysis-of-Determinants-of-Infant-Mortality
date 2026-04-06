@@ -1,0 +1,164 @@
+---
+title: "Group Study 3"
+author: "Aryan Sarin, Dhara Doshi, Amaya Mary Anil"
+output: word_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+```{r}
+library(readxl)
+library(tidyr)
+library(dplyr)
+```
+
+```{r}
+imr <- read_excel("C:/Users/aryan/Downloads/SH_DYN_IMRT.xlsx")
+
+# Keep only BOTHSEX
+imr <- imr %>% filter(Sex == "BOTHSEX")
+
+# Convert wide → long
+imr_long <- imr %>%
+  pivot_longer(
+    cols = matches("^20"),   # all year columns
+    names_to = "Year",
+    values_to = "InfantMortality"
+  ) %>%
+  select(GeoAreaName, Year, InfantMortality)
+
+colnames(imr_long)[1] <- "Country"
+
+```
+
+```{r}
+sba <- read_excel("C:/Users/aryan/Downloads/SH_STA_BRTC.xlsx")
+
+sba_long <- sba %>%
+  pivot_longer(
+    cols = matches("^20"),
+    names_to = "Year",
+    values_to = "SkilledBirth"
+  ) %>%
+  select(GeoAreaName, Year, SkilledBirth)
+
+colnames(sba_long)[1] <- "Country"
+```
+
+```{r}
+mmr <- read_excel("C:/Users/aryan/Downloads/SH_STA_MORT.xlsx")
+
+mmr_long <- mmr %>%
+  pivot_longer(
+    cols = matches("^20"),
+    names_to = "Year",
+    values_to = "MaternalMortality"
+  ) %>%
+  select(GeoAreaName, Year, MaternalMortality)
+
+colnames(mmr_long)[1] <- "Country"
+```
+
+```{r}
+data <- imr_long %>%
+  left_join(sba_long, by = c("Country", "Year")) %>%
+  left_join(mmr_long, by = c("Country", "Year"))
+
+data <- na.omit(data)
+```
+
+```{r}
+data$Year <- as.numeric(data$Year)
+data$InfantMortality <- as.numeric(data$InfantMortality)
+data$SkilledBirth <- as.numeric(data$SkilledBirth)
+data$MaternalMortality <- as.numeric(data$MaternalMortality)
+```
+
+```{r}
+summary(data)
+```
+```{r}
+# DATA VISUALIZATION
+# InfantMortality vs SkilledBirth
+ggplot(data, aes(SkilledBirth, InfantMortality)) +
+  geom_point(color = "steelblue") +
+  geom_smooth(method = "lm", se = FALSE, color = "red") +
+  labs(
+    title = "Skilled Birth Attendance vs Infant Mortality",
+    x = "Skilled Birth Attendance (%)",
+    y = "Infant Mortality Rate"
+  )
+```
+```{r}
+# InfantMortality vs MaternalMortality
+ggplot(data, aes(MaternalMortality, InfantMortality)) +
+  geom_point(color = "darkgreen") +
+  geom_smooth(method = "lm", se = FALSE, color = "red") +
+  labs( title = "Maternal Mortality vs Infant Mortality",
+    x = "Maternal Mortality Rate",
+    y = "Infant Mortality Rate" )
+
+```
+```{r}
+# HISTOGRAM 
+# DISTRIBUTION OF INFANT MORTALITY
+ggplot(data, aes(x = InfantMortality)) +
+  geom_histogram(bins = 30,fill = "orange",color = "black",alpha = 0.7) +
+  labs(
+    title = "Distribution of Infant Mortality Rate",
+    x = "Infant Mortality Rate",
+    y = "Frequency")
+```
+
+```{r}
+model <- lm(InfantMortality ~ SkilledBirth + MaternalMortality, data = data)
+summary(model)
+```
+```{r}
+residual_data <- data.frame(
+  Fitted = fitted(model),
+  Residuals = resid(model)
+)
+# RESIDUALS VS FITTED VALUES
+ggplot(residual_data, aes(x = Fitted, y = Residuals)) + 
+geom_point(color = "blue") + 
+geom_hline(yintercept = 0, color = "red") + 
+labs( title = "Residuals vs Fitted Values", 
+      x = "Fitted Values", 
+      y = "Residuals"  )
+```
+```{r}
+bptest(model)
+```
+```{r}
+# HISTOGRAM OF RESIDUALS
+ggplot(residual_data, aes(x = Residuals)) + 
+geom_histogram( bins = 30, fill = "orange", color = "black", alpha = 0.7  ) + labs( title = "Histogram of Residuals", x = "Residuals",  y = "Frequency")
+
+```
+```{r}
+# Q-Q PLOT OF RESIDUALS
+residual_data <- data.frame( Residuals = resid(model)) 
+ggplot(residual_data, aes(sample = Residuals)) + 
+stat_qq(color = "blue") + stat_qq_line(color = "red") + 
+labs (title = "Q-Q Plot of Residuals", 
+
+x = "Theoretical Quantiles", 
+
+y = "Sample Quantiles")
+
+```
+```{r}
+shapiro.test(residuals(model))
+```
+```{r}
+boxcox(model)
+```
+```{r}
+library(lmtest)
+library(sandwich)
+
+coeftest(model, vcov=vcovHC(model, type="HC1"))
+```
